@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
@@ -29,6 +30,9 @@ type ServiceBindingRequestSpec struct {
 	// BackingServiceSelector is used to identify the backing service operator.
 	BackingServiceSelector BackingServiceSelector `json:"backingServiceSelector"`
 
+	// BackingServiceSelectors is used to identify multiple backing services.
+	BackingServiceSelectors []BackingServiceSelector `json:"backingServiceSelectors"`
+
 	// ApplicationSelector is used to identify the application connecting to the
 	// backing service operator.
 	ApplicationSelector ApplicationSelector `json:"applicationSelector"`
@@ -53,10 +57,8 @@ type ServiceBindingRequestStatus struct {
 // BackingServiceSelector defines the selector based on resource name, version, and resource kind
 // +k8s:openapi-gen=true
 type BackingServiceSelector struct {
-	Group       string `json:"group"`
-	Version     string `json:"version"`
-	Kind        string `json:"kind"`
-	ResourceRef string `json:"resourceRef"`
+	schema.GroupVersionKind `json:",inline" yaml:",inline"`
+	ResourceRef             string `json:"resourceRef"`
 }
 
 // ApplicationSelector defines the selector based on labels and GVR

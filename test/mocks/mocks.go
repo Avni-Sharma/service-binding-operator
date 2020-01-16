@@ -407,9 +407,11 @@ func ServiceBindingRequestMock(
 		},
 	}
 	sbr.Spec.BackingServiceSelector = v1alpha1.BackingServiceSelector{
-		Group:       CRDName,
-		Version:     CRDVersion,
-		Kind:        CRDKind,
+		GroupVersionKind: schema.GroupVersionKind{
+			Group:   CRDName,
+			Version: CRDVersion,
+			Kind:    CRDKind,
+		},
 		ResourceRef: backingServiceResourceRef,
 	}
 	return sbr
