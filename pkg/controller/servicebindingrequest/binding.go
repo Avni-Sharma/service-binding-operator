@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"gotest.tools/assert/cmp"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -261,7 +261,7 @@ func BuildServiceBinder(options *ServiceBinderOptions) (*ServiceBinder, error) {
 	}
 
 	// objs groups all extra objects related to the informed SBR
-	objs := make([]*unstructured.Unstructured, 0, 0)
+	objs := make([]*unstructured.Unstructured, 0)
 
 	// plan is a source of information regarding the binding process
 	ctx := context.Background()
@@ -303,6 +303,9 @@ func BuildServiceBinder(options *ServiceBinderOptions) (*ServiceBinder, error) {
 	// gather related secret, again only appending it if there's a value.
 	secret := NewSecret(options.DynClient, plan)
 	secretObj, found, err := secret.Get()
+	if err != nil {
+		return nil, err
+	}
 	if found {
 		objs = append(objs, secretObj)
 	}

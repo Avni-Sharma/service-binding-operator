@@ -47,9 +47,9 @@ type Binder struct {
 func (b *Binder) search() (*unstructured.UnstructuredList, error) {
 	ns := b.sbr.GetNamespace()
 	gvr := schema.GroupVersionResource{
-		Group:    b.sbr.Spec.ApplicationSelector.Group,
-		Version:  b.sbr.Spec.ApplicationSelector.Version,
-		Resource: b.sbr.Spec.ApplicationSelector.Resource,
+		Group:    b.sbr.Spec.ApplicationSelector.GroupVersionResource.Group,
+		Version:  b.sbr.Spec.ApplicationSelector.GroupVersionResource.Version,
+		Resource: b.sbr.Spec.ApplicationSelector.GroupVersionResource.Resource,
 	}
 
 	var opts metav1.ListOptions
@@ -61,8 +61,8 @@ func (b *Binder) search() (*unstructured.UnstructuredList, error) {
 		opts = metav1.ListOptions{
 			FieldSelector: fields.Set(fieldName).String(),
 		}
-	} else if b.sbr.Spec.ApplicationSelector.MatchLabels != nil {
-		matchLabels := b.sbr.Spec.ApplicationSelector.MatchLabels
+	} else if b.sbr.Spec.ApplicationSelector.LabelSelector != nil {
+		matchLabels := b.sbr.Spec.ApplicationSelector.LabelSelector.MatchLabels
 		opts = metav1.ListOptions{
 			LabelSelector: labels.Set(matchLabels).String(),
 		}
@@ -79,7 +79,7 @@ func (b *Binder) search() (*unstructured.UnstructuredList, error) {
 	if len(objList.Items) == 0 {
 		return nil, errors.NewNotFound(
 			gvr.GroupResource(),
-			b.sbr.Spec.ApplicationSelector.Resource,
+			b.sbr.Spec.ApplicationSelector.GroupVersionResource.Resource,
 		)
 	}
 	return objList, err
