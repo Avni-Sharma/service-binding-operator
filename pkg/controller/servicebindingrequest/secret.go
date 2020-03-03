@@ -20,10 +20,11 @@ type Secret struct {
 
 // customEnvParser parse informed data in order to interpolate with values provided by custom
 // environment component.
-func (s *Secret) customEnvParser(data map[string][]byte) (map[string][]byte, error) {
+func (s *Secret) customEnvParser(customCache map[string]interface{}) (map[string][]byte, error) {
 	// transforming input into format expected by custom environment parser
 	cache := make(map[string]interface{})
-	for k, v := range data {
+	data := make(map[string][]byte)
+	for k, v := range customCache {
 		cache[k] = v
 	}
 
@@ -84,7 +85,7 @@ func (s *Secret) createOrUpdate(payload map[string][]byte) (*unstructured.Unstru
 
 // Commit will store informed data as a secret, commit it against the API server. It can forward
 // errors from custom environment parser component, or from the API server itself.
-func (s *Secret) Commit(data map[string][]byte) (*unstructured.Unstructured, error) {
+func (s *Secret) Commit(data map[string]interface{}) (*unstructured.Unstructured, error) {
 	payload, err := s.customEnvParser(data)
 	if err != nil {
 		return nil, err

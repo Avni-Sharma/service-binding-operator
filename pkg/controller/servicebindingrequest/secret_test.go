@@ -29,11 +29,22 @@ func TestSecretNew(t *testing.T) {
 		SBR:  *sbr,
 	}
 	data := map[string][]byte{"key": []byte("value")}
+	cache := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"dbName": "database-name",
+		},
+		"status": map[string]interface{}{
+			"creds": map[string]interface{}{
+				"user": "database-user",
+				"pass": "database-pass",
+			},
+		},
+	}
 
 	s := NewSecret(f.FakeDynClient(), plan)
 
 	t.Run("customEnvParser", func(t *testing.T) {
-		customData, err := s.customEnvParser(data)
+		customData, err := s.customEnvParser(cache)
 		assert.NoError(t, err)
 		assert.NotNil(t, customData)
 	})
@@ -50,7 +61,7 @@ func TestSecretNew(t *testing.T) {
 	})
 
 	t.Run("Commit", func(t *testing.T) {
-		u, err := s.Commit(data)
+		u, err := s.Commit(cache)
 		assert.NoError(t, err)
 		assertSecretNamespacedName(t, u, ns, name)
 	})

@@ -222,7 +222,7 @@ func (b *ServiceBinder) Bind() (reconcile.Result, error) {
 	sbrStatus := b.SBR.Status.DeepCopy()
 
 	b.Logger.Info("Saving data on intermediary secret...")
-	secretObj, err := b.Secret.Commit(b.Data)
+	secretObj, err := b.Secret.Commit(b.Cache)
 	if err != nil {
 		b.Logger.Error(err, "On saving secret data..")
 		return b.onError(err, b.SBR, sbrStatus, nil)
