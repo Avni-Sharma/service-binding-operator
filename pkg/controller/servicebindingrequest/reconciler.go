@@ -150,11 +150,13 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	bm, err := BuildServiceBinder(options)
 	if err != nil {
 		logger.Error(err, "Creating binding context")
-		if err == EmptyBackingServiceSelectorsErr || err == EmptyApplicationSelectorErr {
+		if err == EmptyBackingServiceSelectorsErr || err == EmptyApplicationSelectorErr || err == ApplicationNotFound {
 			// TODO: find or create an error type containing suitable information to be propagated
 			var reason string
 			if errors.Is(err, EmptyBackingServiceSelectorsErr) {
 				reason = "EmptyBackingServiceSelectors"
+			} else if errors.Is(err, ApplicationNotFound) {
+				reason = "ApplicationNotFound"
 			} else {
 				reason = "EmptyApplicationSelector"
 			}
