@@ -122,6 +122,22 @@ func (b *ServiceBinder) Unbind() (reconcile.Result, error) {
 
 	if err := b.Binder.Unbind(); err != nil {
 		logger.Error(err, "On unbinding related objects")
+		if errors.Is(err, ApplicationNotFound) {
+			reason := "ApplicationNotFound"
+
+			conditionsv1.SetStatusCondition(&b.SBR.Status.Conditions, conditionsv1.Condition{
+				Type:    conditions.BindingReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  reason,
+				Message: err.Error(),
+			})
+			_, updateErr := updateServiceBindingRequestStatus(b.DynClient, b.SBR)
+			if updateErr != nil {
+				return RequeueError(err)
+			}
+			return reconcile.Result{}, nil
+		}
+
 		return RequeueError(err)
 	}
 
