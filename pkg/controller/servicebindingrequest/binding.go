@@ -246,7 +246,22 @@ func (b *ServiceBinder) Bind() (reconcile.Result, error) {
 	updatedObjects, err := b.Binder.Bind()
 	if err != nil {
 		b.Logger.Error(err, "On binding application.")
-		return b.onError(err, b.SBR, sbrStatus, updatedObjects)
+		if err != ApplicationNotFound {
+			return b.onError(err, b.SBR, sbrStatus, updatedObjects)
+		}
+		reason := "ApplicationNotFound"
+
+		conditionsv1.SetStatusCondition(&b.SBR.Status.Conditions, conditionsv1.Condition{
+			Type:    conditions.BindingReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  reason,
+			Message: err.Error(),
+		})
+		_, updateErr := updateServiceBindingRequestStatus(b.DynClient, b.SBR)
+		if updateErr != nil {
+			return RequeueError(err)
+		}
+
 	}
 	b.setApplicationObjects(sbrStatus, updatedObjects)
 

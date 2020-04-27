@@ -116,10 +116,6 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	// fetch and validate namespaced ServiceBindingRequest instance
 	sbr, err := r.getServiceBindingRequest(request.NamespacedName)
 	if err != nil {
-		if errors.Is(err, ApplicationNotFound) {
-			logger.Info("SBR deleted after application deletion")
-			return Done()
-		}
 		logger.Error(err, "On retrieving service-binding-request instance.")
 		return DoneOnNotFound(err)
 	}
@@ -150,11 +146,13 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	bm, err := BuildServiceBinder(options)
 	if err != nil {
 		logger.Error(err, "Creating binding context")
-		if err == EmptyBackingServiceSelectorsErr || err == EmptyApplicationSelectorErr {
+		if err == EmptyBackingServiceSelectorsErr || err == EmptyApplicationSelectorErr || err == ApplicationNotFound {
 			// TODO: find or create an error type containing suitable information to be propagated
 			var reason string
 			if errors.Is(err, EmptyBackingServiceSelectorsErr) {
 				reason = "EmptyBackingServiceSelectors"
+			} else if errors.Is(err, ApplicationNotFound) {
+				reason = "ApplicationNotFound"
 			} else {
 				reason = "EmptyApplicationSelector"
 			}
