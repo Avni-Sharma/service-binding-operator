@@ -64,7 +64,7 @@ func (f ExtraFieldsModifierFunc) ModifyExtraFields(u *unstructured.Unstructured)
 }
 
 var EmptyApplicationSelectorErr = errors.New("application ResourceRef or MatchLabel not found")
-var ApplicationNotFound = errors.New("Application is already deleted")
+var ApplicationNotFoundErr = errors.New("deployments.apps \"deployments\" not found")
 
 // search objects based in Kind/APIVersion, which contain the labels defined in ApplicationSelector.
 func (b *Binder) search() (*unstructured.UnstructuredList, error) {
@@ -94,14 +94,15 @@ func (b *Binder) search() (*unstructured.UnstructuredList, error) {
 	}
 
 	objList, err := b.dynClient.Resource(gvr).Namespace(ns).List(opts)
-	if err != nil {
-		return nil, ApplicationNotFound
+	if err.Error() == "deployments.apps \"deployments\" not found" {
+
+		return nil, ApplicationNotFoundErr
 
 	}
 
 	// Return fake NotFound error explicitly to ensure requeue when objList(^) is empty.
 	if len(objList.Items) == 0 {
-		return nil, ApplicationNotFound
+		return nil, ApplicationNotFoundErr
 	}
 	return objList, err
 }

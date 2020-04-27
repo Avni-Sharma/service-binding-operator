@@ -122,7 +122,7 @@ func (b *ServiceBinder) Unbind() (reconcile.Result, error) {
 
 	if err := b.Binder.Unbind(); err != nil {
 		logger.Error(err, "On unbinding related objects")
-		if errors.Is(err, ApplicationNotFound) {
+		if errors.Is(err, ApplicationNotFoundErr) {
 			reason := "ApplicationNotFound"
 
 			conditionsv1.SetStatusCondition(&b.SBR.Status.Conditions, conditionsv1.Condition{
@@ -246,7 +246,7 @@ func (b *ServiceBinder) Bind() (reconcile.Result, error) {
 	updatedObjects, err := b.Binder.Bind()
 	if err != nil {
 		b.Logger.Error(err, "On binding application.")
-		if err != ApplicationNotFound {
+		if err != ApplicationNotFoundErr {
 			return b.onError(err, b.SBR, sbrStatus, updatedObjects)
 		}
 		reason := "ApplicationNotFound"

@@ -229,7 +229,7 @@ func TestReconcilerGenericBinding(t *testing.T) {
 	// Reconcile without deployment
 	res, err := reconciler.Reconcile(reconcileRequest())
 	require.NoError(t, err)
-	require.True(t, res.Requeue)
+	require.False(t, res.Requeue)
 
 	namespacedName := types.NamespacedName{Namespace: reconcilerNs, Name: reconcilerName}
 	sbrOutput, err := reconciler.getServiceBindingRequest(namespacedName)
