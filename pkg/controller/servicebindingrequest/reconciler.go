@@ -2,7 +2,6 @@ package servicebindingrequest
 
 import (
 	"context"
-	"errors"
 
 	v1 "github.com/openshift/custom-resource-status/conditions/v1"
 	"github.com/redhat-developer/service-binding-operator/pkg/conditions"
@@ -99,10 +98,6 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	// fetch and validate namespaced ServiceBindingRequest instance
 	sbr, err := r.getServiceBindingRequest(request.NamespacedName)
 	if err != nil {
-		if errors.Is(err, ApplicationNotFound) {
-			logger.Info("SBR deleted after application deletion")
-			return Done()
-		}
 		logger.Error(err, "On retrieving service-binding-request instance.")
 		return DoneOnNotFound(err)
 	}

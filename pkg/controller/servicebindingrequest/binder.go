@@ -564,9 +564,6 @@ func (b *Binder) Unbind() error {
 func (b *Binder) Bind() ([]*unstructured.Unstructured, error) {
 	objs, err := b.search()
 	if err != nil {
-		if errors.Is(err, ApplicationNotFound) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return b.update(objs)
