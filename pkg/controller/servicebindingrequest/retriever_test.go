@@ -19,7 +19,7 @@ func TestRetriever(t *testing.T) {
 	ns := "testing"
 	backingServiceNs := "backing-servicec-ns"
 	crName := "db-testing"
-	// testEnvVarPrefix := "TEST_PREFIX"
+	testEnvVarPrefix := "TEST_PREFIX"
 
 	f := mocks.NewFake(t, ns)
 	f.AddMockedUnstructuredCSV("csv")
@@ -38,6 +38,10 @@ func TestRetriever(t *testing.T) {
 		{
 			Object: crInSameNamespace,
 		},
+		{
+			Object:       cr,
+			EnvVarPrefix: &testEnvVarPrefix,
+		},
 	}
 
 	fakeDynClient := f.FakeDynClient()
@@ -47,7 +51,7 @@ func TestRetriever(t *testing.T) {
 		name := obj.GetName()
 		return fmt.Sprintf(`{{ index . %q %q %q %q "metadata" "name" }}`, gvk.Version, gvk.Group, gvk.Kind, name)
 	}
-
+	// check for a GLOBAL EnvVarPrefix
 	retriever = NewRetriever(
 		fakeDynClient,
 		[]v1.EnvVar{
@@ -67,4 +71,26 @@ func TestRetriever(t *testing.T) {
 		"SERVICE_BINDING_OTHER_NAMESPACE": []byte(cr.GetName()),
 		"SERVICE_BINDING_DIRECT_ACCESS":   []byte(cr.GetName()),
 	}, actual)
+
+	// check for EnvVarPrefix per serviceCtx
+	retriever = NewRetriever(
+		fakeDynClient,
+		[]v1.EnvVar{
+			{Name: "SAME_NAMESPACE", Value: "HelloWorld"},
+			{Name: "OTHER_NAMESPACE", Value: "SBO"},
+			{Name: "DIRECT_ACCESS", Value: "DIRECT"},
+		},
+		serviceCtxs,
+		"",
+	)
+	require.NotNil(t, retriever)
+
+	actual, err = retriever.GetEnvVars()
+	require.NoError(t, err)
+	require.Equal(t, map[string][]byte{
+		"TEST_PREFIX_SAME_NAMESPACE":  []byte("HelloWorld"),
+		"TEST_PREFIX_OTHER_NAMESPACE": []byte("SBO"),
+		"TEST_PREFIX_DIRECT_ACCESS":   []byte("DIRECT"),
+	}, actual)
+
 }
