@@ -31,9 +31,11 @@ require (
 
 )
 
-replace (
-	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
+replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
 
+// requested by operator-sdk 0.16
+// https://sdk.operatorframework.io/docs/migration/version-upgrade-guide/#v016x
+replace (
 	k8s.io/api => k8s.io/api v0.0.0-20191016110408-35e52d86657a
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20191016113550-5357c4baaf65
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
