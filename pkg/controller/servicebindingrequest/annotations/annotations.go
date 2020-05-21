@@ -76,16 +76,16 @@ func BuildHandler(
 	}
 
 	// val := bindingInfo.Value
-	bindAs := bindingInfo.BindAs
-	// switch should happen based on bindAs
+	objectType := bindingInfo.ObjectType
+	// switch should happen based on objectType
 	switch {
-	case IsAttribute(val):
+	case IsAttribute(""):
 		return NewAttributeHandler(bindingInfo, *obj), nil
-	case IsSecret(val):
+	case IsSecret(objectType):
 		return NewSecretHandler(kubeClient, bindingInfo, *obj, restMapper)
-	case IsConfigMap(val):
+	case IsConfigMap(objectType):
 		return NewConfigMapHandler(kubeClient, bindingInfo, *obj, restMapper)
 	default:
-		return nil, ErrHandlerNotFound(val)
+		return nil, ErrHandlerNotFound(objectType)
 	}
 }
