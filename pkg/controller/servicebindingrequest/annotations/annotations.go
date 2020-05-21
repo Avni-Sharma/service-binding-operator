@@ -75,8 +75,9 @@ func BuildHandler(
 		return nil, err
 	}
 
-	val := bindingInfo.Value
-
+	// val := bindingInfo.Value
+	bindAs := bindingInfo.BindAs
+	// switch should happen based on bindAs
 	switch {
 	case IsAttribute(val):
 		return NewAttributeHandler(bindingInfo, *obj), nil
