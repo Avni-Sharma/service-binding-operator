@@ -303,7 +303,10 @@ generate-k8s:
 
 ## Generate-OpenAPI: after modifying _types, generate OpenAPI scaffolding.
 generate-openapi:
-	$(Q)GOCACHE=$(GOCACHE) operator-sdk generate openapi
+	# Build the latest openapi-gen from source
+	$(Q)which ./out/openapi-gen > /dev/null || go build -o ./out/openapi-gen k8s.io/kube-openapi/cmd/openapi-gen
+	#$(Q)GOCACHE=$(GOCACHE) ./out/openapi-gen --logtostderr=true -o "" -i github.com/redhat-developer/service-binding-operator/pkg/apis/apps/v1alpha1 -O zz_generated.openapi -p github.com/redhat-developer/service-binding-operator/pkg/apis/apps/v1alpha1 -h ./hack/boilerplate.go.txt -r "-"
+	$(Q)GOCACHE=$(GOCACHE) ./out/openapi-gen --logtostderr=true -o "" -i github.com/redhat-developer/service-binding-operator/pkg/apis/apps/v1alpha1 -O zz_generated.openapi -p ./pkg/apis/apps/v1alpha1 -h ./hack/boilerplate.go.txt -r "-"
 
 ## Vendor: 'go mod vendor' resets the vendor folder to what is defined in go.mod.
 vendor: go.mod go.sum
