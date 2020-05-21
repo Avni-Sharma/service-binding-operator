@@ -2,7 +2,6 @@ package annotations
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -57,21 +56,6 @@ func discoverRelatedResourceName(obj map[string]interface{}, bindingInfo *Bindin
 		return "", InvalidArgumentErr(bindingInfo.ResourceReferencePath)
 	}
 	return name, nil
-}
-
-// discoverBindingType attempts to extract a binding type from the given annotation value val.
-func discoverBindingType(val string) (bindingType, error) {
-	re := regexp.MustCompile("^binding:(.*?):.*$")
-	parts := re.FindStringSubmatch(val)
-	if len(parts) == 0 {
-		return "", ErrInvalidBindingValue(val)
-	}
-	t := bindingType(parts[1])
-	_, ok := supportedBindingTypes[t]
-	if !ok {
-		return "", UnknownBindingTypeErr(t)
-	}
-	return t, nil
 }
 
 // getInputPathFields infers the input path fields based on the given bindingInfo value.
@@ -132,10 +116,7 @@ func (h *ResourceHandler) Handle() (Result, error) {
 		}
 	}
 
-	typ, err := discoverBindingType(h.bindingInfo.Value)
-	if err != nil {
-		return Result{}, err
-	}
+	typ := h.bindingInfo.BindAs
 
 	// get resource's kind.
 	gvk, err := h.restMapper.KindFor(h.relatedGroupVersionResource)

@@ -15,7 +15,7 @@ const (
 	// BindingTypeVolumeMount indicates the binding should happen through a volume mount.
 	BindingTypeVolumeMount bindingType = "volumemount"
 	// BindingTypeEnvVar indicates the binding should happen through environment variables.
-	BindingTypeEnvVar bindingType = "env"
+	BindingTypeEnvVar bindingType = "envVar"
 )
 
 // supportedBindingTypes contains all currently supported binding types.
