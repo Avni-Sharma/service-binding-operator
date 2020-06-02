@@ -116,6 +116,7 @@ func (h *ResourceHandler) Handle() (Result, error) {
 		}
 	}
 
+	//BindAs can be envVar or volume
 	typ := h.bindingInfo.BindAs
 
 	// get resource's kind.

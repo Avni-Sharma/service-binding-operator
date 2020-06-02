@@ -26,8 +26,6 @@ type BindingInfo struct {
 	ObjectType string
 	// Extract a specific field from the configmap/Secret from the Kubernetes resource and map it to different name in the binding Secret
 	SourceKey string
-	// Extract a specific field from the configmap/Secret from the Kubernetes resource
-	VarReference string
 	// Specifies if the element is to be bound as an environment variable or a volume mount using the keywords envVar and volume
 	BindAs string // by default should be an envVar
 }
@@ -84,12 +82,15 @@ func NewBindingInfo(name string, value string) (*BindingInfo, error) {
 		if len(varReference) == 0 {
 			return nil, ErrEmptyAnnotationName
 		}
+		
+		// this contains {status.data.dbCredentials}
+		// need to parse this as a JSON or GO template 
 
 		return &BindingInfo{
-			SourcePath:   m["path"],
 			ObjectType:   m["objectType"],
 			SourceKey:    m["sourceKey"],
-			VarReference: varReference,
+			ResourceReferencePath : m["path"]
+			SourcePath : varReference,
 			Value:        value,
 		}, nil
 	}
