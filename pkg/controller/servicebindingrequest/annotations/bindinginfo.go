@@ -82,16 +82,17 @@ func NewBindingInfo(name string, value string) (*BindingInfo, error) {
 		if len(varReference) == 0 {
 			return nil, ErrEmptyAnnotationName
 		}
-		
+
 		// this contains {status.data.dbCredentials}
-		// need to parse this as a JSON or GO template 
+		// need to parse this as a JSON or GO template
 
 		return &BindingInfo{
-			ObjectType:   m["objectType"],
-			SourceKey:    m["sourceKey"],
-			ResourceReferencePath : m["path"]
-			SourcePath : varReference,
-			Value:        value,
+			ObjectType:            m["objectType"],
+			SourceKey:             m["sourceKey"],
+			ResourceReferencePath: m["path"],
+			BindAs:                m["bindAs"],
+			SourcePath:            varReference,
+			Value:                 value,
 		}, nil
 	}
 

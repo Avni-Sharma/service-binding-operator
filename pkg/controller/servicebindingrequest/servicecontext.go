@@ -192,7 +192,7 @@ func buildServiceContext(
 			return nil, err
 		}
 
-		if r.Type == annotations.BindingTypeVolumeMount {
+		if r.Type == annotations.BindingTypeVolumeMount { // h.BindingInfo.ObjectType==volume
 			volumeKeys = append(volumeKeys, r.Path)
 		}
 	}
