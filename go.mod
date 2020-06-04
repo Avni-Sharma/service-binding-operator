@@ -14,9 +14,9 @@ require (
 	github.com/operator-backing-service-samples/postgresql-operator v0.0.0-20191023140509-5c3697ed3069
 	github.com/operator-framework/operator-lifecycle-manager v0.0.0-20200130164400-12c06cfc05c4
 	github.com/operator-framework/operator-sdk v0.16.0
-	github.com/rogpeppe/godef v1.1.2 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
+	golang.org/x/tools v0.0.0-20200226224502-204d844ad48d // indirect
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.17.1
 	k8s.io/apiextensions-apiserver v0.17.1
