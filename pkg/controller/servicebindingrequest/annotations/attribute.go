@@ -8,6 +8,7 @@ import (
 )
 
 // Attribute example
+
 // “servicebinding.dev/uri”:"path={.status.data.url}"
 const AttributeValue = "binding:env:attribute"
 

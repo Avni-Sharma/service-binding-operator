@@ -58,6 +58,37 @@ func discoverRelatedResourceName(obj map[string]interface{}, bindingInfo *Bindin
 	return name, nil
 }
 
+////////////////////////////////////////////////////////////
+// discoverBindingType attempts to extract a binding type from the given annotation value val.
+// func discoverBindingType(val string) (bindingType, error) {
+// 	re := regexp.MustCompile("^binding:(.*?):.*$")
+// 	parts := re.FindStringSubmatch(val)
+// 	if len(parts) == 0 {
+// 		return "", ErrInvalidBindingValue(val)
+// 	}
+// 	t := bindingType(parts[1])
+// 	_, ok := supportedBindingTypes[t]
+// 	if !ok {
+// 		return "", UnknownBindingTypeErr(t)
+// 	}
+// 	return t, nil
+// }
+/////////////////////////////////////////////////////////////////////////
+
+// discoverBindingType attempts to extract a binding type from the given annotation value val.
+func discoverBindingType(t string) (bindingType, error) {
+	if t != ""{
+	_, ok := supportedBindingTypes[t]
+	if !ok {
+		return "", UnknownBindingTypeErr(t)
+	}
+	
+}else {
+	supportedBindingTypes[BindingTypeEnvVar]
+}
+return t, nil
+}
+
 // getInputPathFields infers the input path fields based on the given bindingInfo value.
 //
 // In the case the resource reference path and source path are the same and no input path prefix has
@@ -117,7 +148,18 @@ func (h *ResourceHandler) Handle() (Result, error) {
 	}
 
 	//BindAs can be envVar or volume
-	typ := h.bindingInfo.BindAs
+	bindAs bindingType := h.bindingInfo.BindAs // syntax error
+	typ, err := discoverBindingType(bindAs)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// #################
+	// typ, err := discoverBindingType(h.bindingInfo.Value)
+	// if err != nil {
+	// 	return Result{}, err
+	// }
+	// ##################
 
 	// get resource's kind.
 	gvk, err := h.restMapper.KindFor(h.relatedGroupVersionResource)
@@ -126,11 +168,26 @@ func (h *ResourceHandler) Handle() (Result, error) {
 	}
 
 	// prefix the output path with the kind of the resource.
-	outputPath := strings.Join([]string{
-		strings.ToLower(gvk.Kind),
-		h.bindingInfo.SourcePath,
-	}, ".")
+	// outputPath := strings.Join([]string{
+	// 	strings.ToLower(gvk.Kind),
+	// 	h.bindingInfo.SourcePath,
+	// }, ".")
 
+	// Data check sourcekey
+
+	sourceKey := h.bindingInfo.SourceKey
+	outputPath := ""
+	if sourceKey == "" {
+		outputPath = strings.Join([]string{
+			strings.ToLower(gvk.Kind),
+			h.bindingInfo.SourcePath,
+		}, ".")
+	} else {
+		outputPath = strings.Join([]string{
+			strings.ToLower(gvk.Kind),
+			h.bindingInfo.SourceKey,
+		}, ".")
+	}
 	return Result{
 		Data: nested.ComposeValue(val, nested.NewPath(outputPath)),
 		Type: typ,

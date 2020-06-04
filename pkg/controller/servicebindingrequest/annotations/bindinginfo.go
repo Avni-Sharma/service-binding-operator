@@ -27,7 +27,7 @@ type BindingInfo struct {
 	// Extract a specific field from the configmap/Secret from the Kubernetes resource and map it to different name in the binding Secret
 	SourceKey string
 	// Specifies if the element is to be bound as an environment variable or a volume mount using the keywords envVar and volume
-	BindAs string // by default should be an envVar
+	BindAs bindingType // by default should be an envVar
 }
 
 var ErrInvalidAnnotationPrefix = errors.New("invalid annotation prefix")
