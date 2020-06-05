@@ -76,17 +76,17 @@ func discoverRelatedResourceName(obj map[string]interface{}, bindingInfo *Bindin
 /////////////////////////////////////////////////////////////////////////
 
 // discoverBindingType attempts to extract a binding type from the given annotation value val.
-func discoverBindingType(t string) (bindingType, error) {
-	if t != ""{
-	_, ok := supportedBindingTypes[t]
-	if !ok {
-		return "", UnknownBindingTypeErr(t)
+func discoverBindingType(t bindingType) (bindingType, error) {
+	if t != "" {
+		_, ok := supportedBindingTypes[t]
+		if !ok {
+			return "", UnknownBindingTypeErr(t)
+		}
+
+	} else {
+		_ = supportedBindingTypes[BindingTypeEnvVar]
 	}
-	
-}else {
-	supportedBindingTypes[BindingTypeEnvVar]
-}
-return t, nil
+	return t, nil
 }
 
 // getInputPathFields infers the input path fields based on the given bindingInfo value.
@@ -147,8 +147,8 @@ func (h *ResourceHandler) Handle() (Result, error) {
 		}
 	}
 
-	//BindAs can be envVar or volume
-	bindAs bindingType := h.bindingInfo.BindAs // syntax error
+	//BindAs can be envVar or volumemount
+	bindAs := h.bindingInfo.BindAs // syntax error
 	typ, err := discoverBindingType(bindAs)
 	if err != nil {
 		return Result{}, err
