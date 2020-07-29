@@ -409,6 +409,8 @@ func buildServiceBinder(
 		options.restMapper,
 	)
 
+	options.sbr.Spec.ApplicationSelector.SetDefaults()
+
 	return &serviceBinder{
 		logger:    options.logger,
 		binder:    binder,

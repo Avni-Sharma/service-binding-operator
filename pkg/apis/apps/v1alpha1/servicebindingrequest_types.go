@@ -81,6 +81,59 @@ type ApplicationSelector struct {
 	LabelSelector               *metav1.LabelSelector `json:"labelSelector,omitempty"`
 	metav1.GroupVersionResource `json:",inline"`
 	ResourceRef                 string `json:"resourceRef,omitempty"`
+
+	// BindingPath refers to the path in the application workload's schema
+	// where the binding workload would be referenced.
+	// +optional
+	BindingPath *BindingPath `json:"bindingPath,omitempty"`
+}
+
+const (
+	// DefaultContainersPath has the logical path logical path
+	// to find containers on supported objects
+	// Used as []string{"spec", "template", "spec", "containers"}
+	DefaultPathToContainers = "spec.template.spec.containers"
+
+	// DefaultPathToVolumes is the logical path to find volumes on supported objects
+	// used as []string{"spec", "template", "spec", "volumes"}
+	DefaultPathToVolumes = "spec.template.spec.volumes"
+)
+
+// SetDefaults set default value for binding path
+func (applicationSelector *ApplicationSelector) SetDefaults() {
+	if applicationSelector.BindingPath == nil {
+		applicationSelector.BindingPath = &BindingPath{
+			PodSpecPath: &PodSpecPath{
+				Containers: DefaultPathToContainers,
+				Volumes:    DefaultPathToVolumes,
+			},
+		}
+	}
+}
+
+// BindingPath defines the path to the field where the binding would be
+// embedded in the workload
+type BindingPath struct {
+	// PodSpecPath overrides the default podSpec path
+	// +optional
+	PodSpecPath *PodSpecPath `json:"podSpecPath,omitempty"`
+
+	// CustomSecret defines the path to a string field where
+	// the secret needs to be assigned.
+	// +optional
+	CustomSecretPath *string `json:"customSecretPath,omitempty"`
+}
+
+// PodSpecPath overrides the default podSpec path
+type PodSpecPath struct {
+	// Containers defines the path to the corev1.Containers reference
+	// Example: "spec.template.spec.containers"
+	Containers string `json:"containers"`
+
+	// Containers defines the path to the corev1.Volumes reference
+	// Example: "spec.template.spec.volumes"
+	// +optional
+	Volumes string `json:"volumes"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

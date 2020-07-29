@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 
 	"gotest.tools/assert/cmp"
 	corev1 "k8s.io/api/core/v1"
@@ -22,13 +21,6 @@ import (
 	"github.com/redhat-developer/service-binding-operator/pkg/apis/apps/v1alpha1"
 	"github.com/redhat-developer/service-binding-operator/pkg/log"
 	knativev1 "knative.dev/serving/pkg/apis/serving/v1"
-)
-
-var (
-	// containersPath logical path to find containers on supported objects
-	containersPath = []string{"spec", "template", "spec", "containers"}
-	// volumesPath logical path to find volumes on supported objects
-	volumesPath = []string{"spec", "template", "spec", "volumes"}
 )
 
 // changeTriggerEnv hijacking environment in order to trigger a change
@@ -119,9 +111,9 @@ func (b *binder) getApplicationByLabelSelector() (*unstructured.UnstructuredList
 // extractSpecVolumes based on volume path, extract it unstructured. It can return error on trying
 // to find data in informed Unstructured object.
 func (b *binder) extractSpecVolumes(obj *unstructured.Unstructured) ([]interface{}, error) {
-	log := b.logger.WithValues("Volumes.NestedPath", volumesPath)
+	log := b.logger.WithValues("Volumes.NestedPath", b.getVolumesPath())
 	log.Debug("Reading volumes definitions...")
-	volumes, _, err := unstructured.NestedSlice(obj.Object, volumesPath...)
+	volumes, _, err := unstructured.NestedSlice(obj.Object, b.getVolumesPath()...)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +133,7 @@ func (b *binder) updateSpecVolumes(
 	if err != nil {
 		return nil, err
 	}
-	if err = unstructured.SetNestedSlice(obj.Object, volumes, volumesPath...); err != nil {
+	if err = unstructured.SetNestedSlice(obj.Object, volumes, b.getVolumesPath()...); err != nil {
 		return nil, err
 	}
 	return obj, nil
@@ -158,7 +150,7 @@ func (b *binder) removeSpecVolumes(
 		return nil, err
 	}
 	volumes = b.removeVolumes(volumes)
-	if err = unstructured.SetNestedSlice(obj.Object, volumes, volumesPath...); err != nil {
+	if err = unstructured.SetNestedSlice(obj.Object, volumes, b.getVolumesPath()...); err != nil {
 		return nil, err
 	}
 	return obj, nil
@@ -219,19 +211,29 @@ func (b *binder) removeVolumes(volumes []interface{}) []interface{} {
 
 // extractSpecContainers search for
 func (b *binder) extractSpecContainers(obj *unstructured.Unstructured) ([]interface{}, error) {
-	log := b.logger.WithValues("Containers.NestedPath", containersPath)
+	log := b.logger.WithValues("Containers.NestedPath", b.getContainersPath())
 
-	containers, found, err := unstructured.NestedSlice(obj.Object, containersPath...)
+	containers, found, err := unstructured.NestedSlice(obj.Object, b.getContainersPath()...)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
-		err = fmt.Errorf("unable to find '%#v' in object kind '%s'", containersPath, obj.GetKind())
+		err = fmt.Errorf("unable to find '%#v' in object kind '%s'", b.getContainersPath(), obj.GetKind())
 		log.Error(err, "is this definition supported by this operator?")
 		return nil, err
 	}
-
 	return containers, nil
+}
+
+// updateSecretField extract the specific secret field from
+// the object, and triggers an update.
+func (b *binder) updateSecretField(
+	obj *unstructured.Unstructured,
+) (*unstructured.Unstructured, error) {
+	if err := unstructured.SetNestedField(obj.Object, b.sbr.GetName(), b.getSecretFieldPath()...); err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
 // updateSpecContainers extract containers from object, and trigger update.
@@ -245,10 +247,22 @@ func (b *binder) updateSpecContainers(
 	if containers, err = b.updateContainers(containers); err != nil {
 		return nil, err
 	}
-	if err = unstructured.SetNestedSlice(obj.Object, containers, containersPath...); err != nil {
+	if err = unstructured.SetNestedSlice(obj.Object, containers, b.getContainersPath()...); err != nil {
 		return nil, err
 	}
 	return obj, nil
+}
+
+func (b *binder) getContainersPath() []string {
+	return strings.Split(b.sbr.Spec.ApplicationSelector.BindingPath.PodSpecPath.Containers, ".")
+}
+
+func (b *binder) getVolumesPath() []string {
+	return strings.Split(b.sbr.Spec.ApplicationSelector.BindingPath.PodSpecPath.Volumes, ".")
+}
+
+func (b *binder) getSecretFieldPath() []string {
+	return strings.Split(*b.sbr.Spec.ApplicationSelector.BindingPath.CustomSecretPath, ".")
 }
 
 // removeSpecContainers find and edit containers resource subset, removing bind related entries
@@ -257,6 +271,7 @@ func (b *binder) updateSpecContainers(
 func (b *binder) removeSpecContainers(
 	obj *unstructured.Unstructured,
 ) (*unstructured.Unstructured, error) {
+
 	containers, err := b.extractSpecContainers(obj)
 	if err != nil {
 		return nil, err
@@ -264,7 +279,7 @@ func (b *binder) removeSpecContainers(
 	if containers, err = b.removeContainers(containers); err != nil {
 		return nil, err
 	}
-	if err = unstructured.SetNestedSlice(obj.Object, containers, containersPath...); err != nil {
+	if err = unstructured.SetNestedSlice(obj.Object, containers, b.getContainersPath()...); err != nil {
 		return nil, err
 	}
 	return obj, nil
@@ -493,40 +508,44 @@ func (b *binder) update(objs *unstructured.UnstructuredList) ([]*unstructured.Un
 	updatedObjs := []*unstructured.Unstructured{}
 
 	for _, obj := range objs.Items {
-		// modify the copy of the original object and use the original one later for comparison
-		updatedObj := obj.DeepCopy()
+		// store a copy of the original object to later be used in a comparison
+		originalObj := obj.DeepCopy()
 		name := obj.GetName()
 		log := b.logger.WithValues("Obj.Name", name, "Obj.Kind", obj.GetKind())
 		log.Debug("Inspecting object...")
 
-		sbrNamespacedName := types.NamespacedName{Namespace: b.sbr.GetNamespace(), Name: b.sbr.GetName()}
-		updatedObj = setSBRAnnotations(sbrNamespacedName, updatedObj)
+		var updatedObj *unstructured.Unstructured
+		var err error
+		if b.sbr.Spec.ApplicationSelector.BindingPath.CustomSecretPath != nil {
+			_, err = b.updateSecretField(&obj)
+			if err != nil {
+				return nil, err
+			}
+		}
 
-		updatedObj, err := b.updateSpecContainers(updatedObj)
+		updatedObj, err = b.updateSpecContainers(&obj)
 		if err != nil {
 			return nil, err
 		}
 
 		if len(b.volumeKeys) > 0 {
-			if updatedObj, err = b.updateSpecVolumes(updatedObj); err != nil {
+			if updatedObj, err = b.updateSpecVolumes(&obj); err != nil {
 				return nil, err
 			}
 		}
 
-		if specsAreEqual, err := nestedUnstructuredComparison(&obj, updatedObj); err != nil {
+		if specsAreEqual, err := nestedUnstructuredComparison(originalObj, updatedObj, "spec"); err != nil {
 			log.Error(err, "")
 			continue
 		} else if specsAreEqual {
 			continue
 		}
-
 		if b.modifier != nil {
 			err = b.modifier.ModifyExtraFields(updatedObj)
 			if err != nil {
 				return nil, err
 			}
 		}
-
 		log.Debug("Updating object...")
 		gk := updatedObj.GroupVersionKind().GroupKind()
 		version := updatedObj.GroupVersionKind().Version
@@ -537,13 +556,11 @@ func (b *binder) update(objs *unstructured.UnstructuredList) ([]*unstructured.Un
 		updated, err := b.dynClient.Resource(mapping.Resource).
 			Namespace(updatedObj.GetNamespace()).
 			Update(updatedObj, metav1.UpdateOptions{})
-
 		if err != nil {
 			return nil, err
 		}
 		updatedObjs = append(updatedObjs, updated)
 	}
-
 	return updatedObjs, nil
 }
 
