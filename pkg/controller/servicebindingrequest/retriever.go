@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/redhat-developer/service-binding-operator/pkg/controller/servicebindingrequest/annotations"
 	"github.com/redhat-developer/service-binding-operator/pkg/controller/servicebindingrequest/envvars"
 	"github.com/redhat-developer/service-binding-operator/pkg/log"
 )
@@ -125,9 +126,17 @@ func (r *retriever) ProcessServiceContexts(
 		if err != nil {
 			return nil, nil, err
 		}
+		// if svcCtx is secret then envVars should be decoded
+		gvk := svcCtx.service.GetObjectKind().GroupVersionKind()
+
 		for k, v := range s {
-			envVars[k] = []byte(v)
+			if gvk.Kind == "Secret" {
+				envVars[k] = []byte(annotations.Base64StringValue(([]byte(v))))
+			} else {
+				envVars[k] = []byte(v)
+			}
 		}
+
 		volumeKeys = append(volumeKeys, v...)
 	}
 

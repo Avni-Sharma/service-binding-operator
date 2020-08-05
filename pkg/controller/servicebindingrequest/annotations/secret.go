@@ -19,7 +19,7 @@ func isSecret(s string) bool {
 }
 
 // decodeBase64String asserts whether val is a string and returns its decoded value.
-func base64StringValue(v interface{}) (string, error) {
+func Base64StringValue(v interface{}) (string, error) {
 	stringVal, ok := v.(string)
 	if !ok {
 		return "", fmt.Errorf("should be a string")
@@ -53,6 +53,6 @@ func newSecretHandler(
 		return nil, err
 	}
 
-	h.stringValue = base64StringValue
+	h.stringValue = Base64StringValue
 	return h, nil
 }
