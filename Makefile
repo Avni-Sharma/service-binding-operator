@@ -146,6 +146,7 @@ OLM_CATALOG_DIR ?= $(shell echo ${PWD})/deploy/olm-catalog
 CRDS_DIR ?= $(shell echo ${PWD})/deploy/crds
 LOGS_DIR ?= $(OUTPUT_DIR)/logs
 GOLANGCI_LINT_BIN=$(OUTPUT_DIR)/golangci-lint
+PYTHON_VENV_DIR=$(OUTPUT_DIR)/venv3
 
 # -- Variables for uploading code coverage reports to Codecov.io --
 # This default path is set by the OpenShift CI
@@ -158,6 +159,8 @@ PULL_NUMBER := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].number')
 
 # -- Variables for acceptance tests
 TEST_ACCEPTANCE_START_SBO ?= local
+TEST_ACCEPTANCE_OUTPUT_DIR ?= $(OUTPUT_DIR)/acceptance-tests
+TEST_ACCEPTANCE_ARTIFACTS ?= /tmp/artifacts
 
 ## -- Static code analysis (lint) targets --
 
@@ -169,8 +172,8 @@ YAML_FILES := $(shell find . -path ./vendor -prune -o -type f -regex ".*y[a]ml" 
 .PHONY: lint-yaml
 ## runs yamllint on all yaml files
 lint-yaml: ${YAML_FILES}
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install yamllint==1.23.0
-	$(Q)$(OUTPUT_DIR)/venv3/bin/yamllint -c .yamllint $(YAML_FILES)
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install yamllint==1.23.0
+	$(Q)$(PYTHON_VENV_DIR)/bin/yamllint -c .yamllint $(YAML_FILES)
 
 .PHONY: lint-go-code
 ## Checks the code with golangci-lint
@@ -184,15 +187,15 @@ $(GOLANGCI_LINT_BIN):
 
 ## -- Check the python code
 .PHONY: lint-python-code
-lint-python-code:
-	$(Q)./hack/check-python/lint-python-code.sh
+lint-python-code: setup-venv
+	$(Q)PYTHON_VENV_DIR=$(PYTHON_VENV_DIR) ./hack/check-python/lint-python-code.sh
 
 .PHONY: setup-venv
 ## Setup virtual environment
 setup-venv:
-	$(Q)python3 -m venv $(OUTPUT_DIR)/venv3
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install --upgrade setuptools
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install --upgrade pip
+	$(Q)python3 -m venv $(PYTHON_VENV_DIR)
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install --upgrade setuptools
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install --upgrade pip
 
 ## -- Test targets --
 
@@ -277,14 +280,16 @@ test-unit-with-coverage:
 
 .PHONY: test-acceptance-setup
 ## Setup the environment for the acceptance tests
+test-acceptance-setup: setup-venv e2e-setup set-test-namespace deploy-rbac deploy-crds
 ifeq ($(TEST_ACCEPTANCE_START_SBO), local)
 test-acceptance-setup:
 	$(Q)echo "Starting local SBO instance"
-	$(eval TEST_ACCEPTANCE_SBO_STARTED := $(shell OPERATOR_NAMESPACE="$(TEST_NAMESPACE)" ZAP_FLAGS="$(ZAP_FLAGS)" ./hack/deploy-sbo-local.sh))
+	$(eval TEST_ACCEPTANCE_SBO_STARTED := $(shell OPERATOR_NAMESPACE="$(TEST_NAMESPACE)" ZAP_FLAGS="$(ZAP_FLAGS)" OUTPUT="$(TEST_ACCEPTANCE_OUTPUT_DIR)" ./hack/deploy-sbo-local.sh))
 else ifeq ($(TEST_ACCEPTANCE_START_SBO), operator-hub)
 test-acceptance-setup:
 	$(eval TEST_ACCEPTANCE_SBO_STARTED := $(shell ./hack/deploy-sbo-operator-hub.sh))
 endif
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install -q -r test/acceptance/features/requirements.txt
 
 .PHONY: set-test-namespace
 set-test-namespace: get-test-namespace
@@ -292,13 +297,20 @@ set-test-namespace: get-test-namespace
 
 .PHONY: test-acceptance
 ## Runs acceptance tests
-test-acceptance: e2e-setup set-test-namespace deploy-clean deploy-rbac deploy-crds test-acceptance-setup
+test-acceptance: test-acceptance-setup
 	$(Q)echo "Running acceptance tests"
 	$(Q)TEST_ACCEPTANCE_START_SBO=$(TEST_ACCEPTANCE_START_SBO) \
 		TEST_ACCEPTANCE_SBO_STARTED=$(TEST_ACCEPTANCE_SBO_STARTED) \
 		TEST_NAMESPACE=$(TEST_NAMESPACE) \
-		behave -v --no-capture --no-capture-stderr --tags="~@disabled" test/acceptance/features
+		$(PYTHON_VENV_DIR)/bin/behave --junit --junit-directory $(TEST_ACCEPTANCE_OUTPUT_DIR) $(V_FLAG) --no-capture --no-capture-stderr --tags="~@disabled" test/acceptance/features
 	$(Q)kill $(TEST_ACCEPTANCE_SBO_STARTED)
+
+.PHONY: test-acceptance-artifacts
+## Collect artifacts from acceptance tests to be archived in CI
+test-acceptance-artifacts:
+	$(Q)echo "Gathering acceptance tests artifacts"
+	$(Q)mkdir -p $(TEST_ACCEPTANCE_ARTIFACTS) \
+	    && cp -rvf $(TEST_ACCEPTANCE_OUTPUT_DIR) $(TEST_ACCEPTANCE_ARTIFACTS)/
 
 .PHONY: test
 ## Test: Runs unit and integration (e2e) tests
@@ -336,11 +348,11 @@ build-image:
 generate-k8s:
 	$(Q)GOCACHE=$(GOCACHE) operator-sdk generate k8s
 
-build-openapi-gen-cli: $(OUTPUT_DIR)/openapi-gen
+$(OUTPUT_DIR)/openapi-gen:
 	$(Q)GOCACHE=$(GOCACHE) go build -o $(OUTPUT_DIR)/openapi-gen k8s.io/kube-openapi/cmd/openapi-gen
 
 ## Generate-OpenAPI: after modifying _types, generate OpenAPI scaffolding.
-generate-openapi: build-openapi-gen-cli
+generate-openapi: $(OUTPUT_DIR)/openapi-gen
 	# Build the latest openapi-gen from source
 	$(Q)GOCACHE=$(GOCACHE) $(OUTPUT_DIR)/openapi-gen --logtostderr=true -o "" -i $(GO_PACKAGE_PATH)/pkg/apis/apps/v1alpha1 -O zz_generated.openapi -p ./pkg/apis/apps/v1alpha1 -h ./hack/boilerplate.go.txt -r "-"
 
@@ -447,15 +459,9 @@ else
 		-Z > codecov-upload.log
 endif
 
-## -- Target for maintaining consistent crd copies --
 
-.PHONY: consistent-crds-manifests-upstream
-## Copy crd from deploy/crds to manifests-upstream/
-consistent-crds-manifests-upstream:
-	$(Q)cd ./manifests-upstream/${OPERATOR_VERSION}/ && ln -srf ../../deploy/crds/apps_v1alpha1_servicebindingrequest_crd.yaml \
-	servicebindingrequests.apps.openshift.io.crd.yaml
+## -- Bundle validation, push and release targets
 
-## -- Target for merge to master dev release --
 .PHONY: merge-to-master-release
 ## Make a dev release on every merge to master
 merge-to-master-release:
@@ -465,7 +471,6 @@ merge-to-master-release:
 	docker push "$(OPERATOR_IMAGE_REF)"
 
 
-## -- Target for pushing manifest bundle to service-binding-operator-manifest repo --
 .PHONY: push-to-manifest-repo
 ## Push manifest bundle to service-binding-operator-manifest repo
 push-to-manifest-repo:
@@ -483,35 +488,32 @@ push-to-manifest-repo:
 	sed -i -e 's,ICON_BASE64_DATA,$(shell base64 --wrap=0 ./assets/icon/red-hat-logo.svg),g' $(MANIFESTS_TMP)/${BUNDLE_VERSION}/*.clusterserviceversion.yaml
 	sed -i -e 's,ICON_MEDIA_TYPE,image/svg+xml,g' $(MANIFESTS_TMP)/${BUNDLE_VERSION}/*.clusterserviceversion.yaml
 
-## -- Target for preparing manifest bundle to quay application --
 .PHONY: prepare-bundle-to-quay
 ## Prepare manifest bundle to quay application
 prepare-bundle-to-quay:
-	$(Q)python3.7 -m venv $(OUTPUT_DIR)/venv3
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install --upgrade setuptools
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install --upgrade pip
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install operator-courier==2.1.2
-	$(Q)$(OUTPUT_DIR)/venv3/bin/operator-courier --version
-	$(Q)$(OUTPUT_DIR)/venv3/bin/operator-courier verify $(MANIFESTS_TMP)
+	$(Q)python3.7 -m venv $(PYTHON_VENV_DIR)
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install --upgrade setuptools
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install --upgrade pip
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install operator-courier==2.1.2
+	$(Q)$(PYTHON_VENV_DIR)/bin/operator-courier --version
+	$(Q)$(PYTHON_VENV_DIR)/bin/operator-courier verify $(MANIFESTS_TMP)
 	rm -rf deploy/olm-catalog/$(GO_PACKAGE_REPO_NAME)/$(BUNDLE_VERSION)
 
-## -- Target to push bundle to quay
+
 .PHONY: push-bundle-to-quay
 ## Push manifest bundle to quay application
 push-bundle-to-quay:
-	$(Q)$(OUTPUT_DIR)/venv3/bin/operator-courier verify $(SBR_MANIFESTS)
-	$(Q)$(OUTPUT_DIR)/venv3/bin/operator-courier push $(SBR_MANIFESTS) redhat-developer service-binding-operator $(BUNDLE_VERSION) "$(QUAY_BUNDLE_TOKEN)"
+	$(Q)$(PYTHON_VENV_DIR)/bin/operator-courier verify $(SBR_MANIFESTS)
+	$(Q)$(PYTHON_VENV_DIR)/bin/operator-courier push $(SBR_MANIFESTS) redhat-developer service-binding-operator $(BUNDLE_VERSION) "$(QUAY_BUNDLE_TOKEN)"
 
-## -- Target for validating the operator --
+
 .PHONY: dev-release
 ## validating the operator by installing new quay releases
 dev-release:
 	BUNDLE_VERSION=$(BUNDLE_VERSION) ./hack/dev-release.sh
 
-## -- Target to validate release --
 .PHONY: validate-release
 ## validate the operator by installing the releases
 validate-release: setup-venv
-	$(Q)$(OUTPUT_DIR)/venv3/bin/pip install yq==2.10.0
+	$(Q)$(PYTHON_VENV_DIR)/bin/pip install yq==2.10.0
 	BUNDLE_VERSION=$(BASE_BUNDLE_VERSION) CHANNEL="alpha" ./hack/validate-release.sh
-

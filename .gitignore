@@ -12,6 +12,9 @@ tmp/
 # gocache
 out/
 
+# Acceptance test cache
+.kube/
+
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###
 # -*- mode: gitignore; -*-
@@ -90,5 +93,4 @@ tags
 .idea
 ### Logs
 **/*.log
-venv
 **/*/__pycache__
