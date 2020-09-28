@@ -10,7 +10,7 @@ expanding the adoption of their operators.
 
 When a `ServiceBinding` is created the Service Binding Operator
 collects binding information and shares it with application. The
-Binding Service Operator's controller injects the binding information
+Service Binding Operator's controller injects the binding information
 into the application's `DeploymentConfig`, `Deployment` or `Replicaset`
 as environment variables via an intermediate Secret.
 The binding also works with Knative `Services` as it works with any API which has the podspec defined in the its jsonpath as
@@ -36,7 +36,7 @@ metadata:
   namespace: service-binding-demo
   annotations:
     openshift.io/host.generated: 'true'
-    servicebindingoperator.redhat.io/spec.host: 'binding:env:attribute' #annotate here.
+    service.binding/host: 'path={.spec.host}' #annotate here.
 spec:
   host: example-sbo.apps.ci-ln-smyggvb-d5d6b.origin-ci-int-aws.dev.rhcloud.com
   path: /
@@ -63,79 +63,187 @@ information that is “interesting” to applications.
 
 There are three methods for making Operator Managed Backing Service Bindable:
 
-* [Operator Providing Metadata in CRD Annotations](#operator-providing-metadata-in-crd-annotations)
+* [Non-OLM Operator and Resource Annotations](#Non-OLM-Operator-and-Resource-Annotations)
 * [Operator Providing Metadata in OLM](#operator-providing-metadata-in-olm)
 * [Operator Not Providing Metadata](#operator-not-providing-metadata)
 
-### Operator Providing Metadata in CRD Annotations
+### Non-OLM Operator and Resource Annotations
 
 This feature enables operator providers who do not use OLM (Operator Lifecycle
 Manager) to provide metadata outside of an OLM descriptor. In this method,
 the binding information is provided as annotations in the CRD of the operator
-that manages the backing service. The Service Binding Operator extracts the
+that manages the backing service or the CR. The Service Binding Operator extracts the
 annotations to bind the application together with the backing service.
 
-For example, this is a *bind-able* operator's annotations in its CRD for a
-PostgreSQL database backing operator.
-``` yaml
----
-[...]
-kind: CustomResourceDefinition
-apiVersion: apiextensions.k8s.io/v1beta1
+An intermediate Secret is created with the data exposed by the services via annotations. To handle the majority of existing resources and CRDs, `Secret` generation needs to support the following behaviours:
+
+1.  Extract a string from a resource
+1.  Extract an entire `ConfigMap`/`Secret` refrenced from a resource
+1.  Extract a specific entry in a `ConfigMap`/`Secret` referenced from a resource
+1.  Extract entries from a collection of objects, mapping keys and values from entries in a `ConfigMap`/`Secret` referenced from a resource
+1.  Map each value to a specific key
+
+While the syntax of the generation strategies are specific to the system they are annotating, they are based on a common data model.
+
+| Model | Description
+| ----- | -----------
+| `path` | A template represention of the path to an element in a Kubernetes resource.  The value of `path` is specified as [JSONPath](https://kubernetes.io/docs/reference/kubectl/jsonpath/).  Required.
+| `objectType` | Specifies the type of the object selected by the `path`.  One of `ConfigMap`, `Secret`, or `string` (default).
+| `elementType` | Specifies the type of object in an array selected by the `path`.  One of `sliceOfMaps`, `sliceOfStrings`, `string` (default).
+| `sourceKey` | Specifies a particular key to select if a `ConfigMap` or `Secret` is selected by the `path`.  Specifies a value to use for the key for an entry in a binding `Secret` when `elementType` is `sliceOfMaps`.
+| `sourceValue` | Specifies a particular value to use for the value for an entry in a binding `Secret` when `elementType` is `sliceOfMaps`
+
+Let's take a look at the annotations in a more descriptive manner.
+The following examples refer to this resource definition.
+
+```yaml
+apiVersion: apps.kube.io/v1beta1
+kind: Database
 metadata:
-  name: databases.postgresql.baiju.dev
-  annotations:
-    servicebindingoperator.redhat.io/status.dbConfigMap-host: 'binding:env:object:configmap'
-    servicebindingoperator.redhat.io/status.dbCredentials-password: 'binding:env:object:secret'
-    servicebindingoperator.redhat.io/status.dbCredentials-username: 'binding:env:object:secret'
-    servicebindingoperator.redhat.io/status.dbName: 'binding:env:attribute'
-    servicebindingoperator.redhat.io/spec.Token.private: 'binding:volumemount:secret'
+  name: my-cluster
 spec:
-  group: postgresql.baiju.dev
-  version: v1alpha1
+  ...
+
+status:
+  bootstrap:
+  - type: plain
+    url: myhost2.example.com
+    name: hostGroup1
+  - type: tls
+    url: myhost1.example.com:9092,myhost2.example.com:9092
+    name: hostGroup2
+  data:
+    dbConfiguration: database-config     # ConfigMap
+    dbCredentials: database-cred-Secret  # Secret
+    url: db.stage.redhat.com
 ```
 
-The following annotation indicates that the key `host` in the `configmap` referenced in `status.dbConfigMap`
-is "interesting" for binding.
-
-```
-servicebindingoperator.redhat.io/status.dbConfigMap-host: 'binding:env:object:configmap'
-```
-
-Similarly, the following annotation indicates that the key `password` in the `secret` referenced in `status.dbCredentials`
-is "interesting" for binding.
-
-```
-servicebindingoperator.redhat.io/status.dbCredentials-password: 'binding:env:object:secret'
-```
+1.  Mount an entire `Secret` as the binding `Secret`
+    ```plain
+    “service.binding":
+      ”path={.status.data.dbCredentials},objectType=Secret”
+    ```
+1.  Mount an entire `ConfigMap` as the binding `Secret`
+    ```plain
+    service.binding”:
+      "path={.status.data.dbConfiguration},objectType=ConfigMap”
+    ```
+1.  Mount an entry from a `ConfigMap` into the binding `Secret`
+    ```plain
+    “service.binding/certificate”:
+      "path={.status.data.dbConfiguration},objectType=ConfigMap,sourceKey=certificate"
+    ```
+1.  Mount an entry from a `ConfigMap` into the binding `Secret` with a different key
+    ```plain
+    “service.binding/timeout”:
+      “path={.status.data.dbConfiguration},objectType=ConfigMap,sourceKey=db_timeout”
+    ```
+1.  Mount a resource definition value into the binding `Secret`
+    ```plain
+    “service.binding/uri”:
+      "path={.status.data.url}"
+    ```
+1.  Mount a resource definition value into the binding `Secret` with a different key
+    ```plain
+    “service.binding/uri":
+      "path={.status.data.connectionURL}”
+    ```
+1.  Mount the entries of a collection into the binding `Secret` selecting the key and value from each entry
+    ```plain
+    “service.binding/endpoints”:
+      "path={.status.bootstrap},elementType=sliceOfMaps,sourceKey=type,sourceValue=url"
+    ```
 
 ### Operator Providing Metadata in OLM
 
 This feature enables operator providers to specify binding information an
 operator's OLM (Operator Lifecycle Manager) descriptor. The Service Binding
 Operator extracts to bind the application together with the backing service.
-The information may be specified in the "status" and/or "spec" section of the
-OLM in plaintext or as a reference to a secret.
+OLM Operators are configured by setting the `specDescriptor` and `statusDescriptor` entries in the [ClusterServiceVersion](https://docs.openshift.com/container-platform/4.4/operators/operator_sdk/osdk-generating-csvs.html) with mapping descriptors.
 
-For example, this is a *bind-able* operator OLM Descriptor for a
-PostgreSQL database backing operator.
-``` yaml
----
-[...]
-statusDescriptors:
-  description: Name of the Secret to hold the DB user and password
-    displayName: DB Password Credentials
-    path: dbCredentials
-    x-descriptors:
-      - urn:alm:descriptor:io.kubernetes:Secret
-      - binding:env:object:secret:user
-      - binding:env:object:secret:password
-  description: Database connection IP address
-    displayName: DB IP address
-    path: dbConnectionIP
-    x-descriptors:
-      - binding:env:attribute
+The following examples refer to this resource definition.
+
+```yaml
+apiVersion: apps.kube.io/v1beta1
+kind: Database
+metadata:
+  name: my-cluster
+spec:
+  ...
+
+status:
+  bootstrap:
+  - type: plain
+    url: myhost2.example.com
+    name: hostGroup1
+  - type: tls
+    url: myhost1.example.com:9092,myhost2.example.com:9092
+    name: hostGroup2
+  data:
+    dbConfiguration: database-config     # ConfigMap
+    dbCredentials: database-cred-Secret  # Secret
+    url: db.stage.redhat.com
 ```
+
+1.  Mount an entire `Secret` as the binding `Secret`
+
+    ```yaml
+    - path: data.dbCredentials
+      x-descriptors:
+      - urn:alm:descriptor:io.kubernetes:Secret
+      - service.binding
+    ```
+
+1.  Mount an entire `ConfigMap` as the binding `Secret`
+
+	```yaml
+    - path: data.dbConfiguration
+      x-descriptors:
+      - urn:alm:descriptor:io.kubernetes:ConfigMap
+      - service.binding
+    ```
+
+1.  Mount an entry from a `ConfigMap` into the binding `Secret`
+
+    ```yaml
+    - path: data.dbConfiguration
+      x-descriptors:
+      - urn:alm:descriptor:io.kubernetes:ConfigMap
+      - service.binding:certificate:sourceKey=certificate
+    ```
+
+1.  Mount an entry from a `ConfigMap` into the binding `Secret` with a different key
+
+    ```yaml
+    - path: data.dbConfiguration
+      x-descriptors:
+      - urn:alm:descriptor:io.kubernetes:ConfigMap
+      - service.binding:timeout:sourceKey=db_timeout
+    ```
+
+1.  Mount a resource definition value into the binding `Secret`
+
+    ```yaml
+    - path: data.uri
+      x-descriptors:
+      - service.binding:uri
+    ```
+
+1.  Mount a resource definition value into the binding `Secret` with a different key
+
+    ```yaml
+    - path: data.connectionURL
+      x-descriptors:
+      - service.binding:uri
+    ```
+
+1.  Mount the entries of a collection into the binding `Secret` selecting the key and value from each entry
+
+    ```yaml
+    - path: bootstrap
+      x-descriptors:
+      - service.binding:endpoints:elementType=sliceOfMaps:sourceKey=type:sourceValue=url
+    ```
 
 ### Operator Not Providing Metadata
 
