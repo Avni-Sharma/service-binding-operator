@@ -1,5 +1,5 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: service-binding-operator
 rules:
@@ -77,5 +77,16 @@ rules:
   resources:
   - routes
   verbs:
-  - get
-  - list
+  - ""
+- apiGroups:
+  - servicebindings.operators.coreos.com
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - etcdclusters.etcd.database.coreos.com
+  resources:
+  - "*"
+  verbs:
+  - "*"

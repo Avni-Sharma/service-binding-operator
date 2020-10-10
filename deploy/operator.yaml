@@ -16,7 +16,7 @@ spec:
       containers:
         - name: service-binding-operator
           # Replace this with the built image name
-          image: REPLACE_IMAGE
+          image: quay.io/redhat-developer/app-binding-operator:e759423
           command:
           - service-binding-operator
           imagePullPolicy: Always
