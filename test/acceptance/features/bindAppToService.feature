@@ -756,3 +756,42 @@ Feature: Bind an application to a service
             """
         Then Service Binding "binding-request-cross-ns-service" is ready
         And The application env var "BACKEND_HOST_CROSS_NS_SERVICE" has value "cross.ns.service.stable.example.com"
+
+    @negative
+    Scenario: Service binding with a missing app and configMap as a service
+        Given ConfigMap is applied
+            """
+            apiVersion: v1
+            kind: ConfigMap
+            metadata:
+                name: example
+            data:
+                word: "hello"
+            """
+        When Service Binding is applied
+            """
+            apiVersion: operators.coreos.com/v1alpha1
+            kind: ServiceBinding
+            metadata:
+                name: binding-request-configmap
+            spec:
+                application:
+                    name: nodejs-missing-app
+                    group: apps
+                    version: v1
+                    resource: deployments
+                services:
+                -   group: ""
+                    version: v1
+                    kind: ConfigMap
+                    name: example
+                    id: cm
+                mappings:
+                  - name: Demo_Word
+                    value: '{{ .cm.data.word }}'
+            """
+        Then jq ".status.conditions[] | select(.type=="CollectionReady").status" of Service Binding "binding-request-configmap" should be changed to "True"
+        And jq ".status.conditions[] | select(.type=="InjectionReady").status" of Service Binding "binding-request-configmap" should be changed to "False"
+        And jq ".status.conditions[] | select(.type=="InjectionReady").reason" of Service Binding "binding-request-configmap" should be changed to "EmptyApplication"
+        And jq ".status.conditions[] | select(.type=="Ready").status" of Service Binding "binding-request-missing-configmap" should be changed to "True"
+        And Secret "binding-request-empty-app" contains "Demo_Word" key with value "hello"
